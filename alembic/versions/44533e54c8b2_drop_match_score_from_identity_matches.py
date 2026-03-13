@@ -17,14 +17,9 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Drop old match_score index if it exists
-    try:
-        op.drop_index('idx_match_score', table_name='identity_matches')
-    except:
-        pass
-    
-    # Drop old match_score column
-    op.drop_column('identity_matches', 'match_score')
+    # Use raw SQL with IF EXISTS to avoid transaction abort on missing objects
+    op.execute('DROP INDEX IF EXISTS idx_match_score')
+    op.execute('ALTER TABLE identity_matches DROP COLUMN IF EXISTS match_score')
 
 
 def downgrade() -> None:
