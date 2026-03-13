@@ -1,3 +1,5 @@
+const { sleep } = require('../utils');
+
 /**
  * Roobet.com Puppeteer worker
  */
@@ -7,77 +9,54 @@ module.exports = {
     siteUrl: 'https://roobet.com',
     async bootstrap(page) {
         console.log('[roobet] Bootstrapping Roobet page...');
-        await page.waitForTimeout(2000); // Wait for page to load
-        
-        // Click the live chat button (just after page load, before any scraping)
-        // Retry every few seconds if button is not found
+        await sleep(2000);
+
+        // Click the live chat button: MuiIconButton with aria-haspopup + data-border-outline and chat SVG (path d contains M7.29412 / 8.18823)
         console.log('[roobet] Looking for live chat button...');
-        const maxRetries = 10; // Try for up to 20 seconds (10 retries * 2 seconds)
-        const retryDelay = 2000; // Wait 2 seconds between retries
+        const maxRetries = 10;
+        const retryDelay = 2000;
         let chatButtonClicked = false;
-        
+
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                // Try multiple selectors to find the chat button
-                // Order: most specific to least specific
-                const chatButtonSelectors = [
-                    'button.MuiButtonBase-root.MuiIconButton-root.MuiIconButton-colorTertiary.MuiIconButton-sizeMedium[aria-haspopup="true"][data-border-outline="true"]',
-                    'button.MuiIconButton-root.MuiIconButton-colorTertiary[aria-haspopup="true"][data-border-outline="true"]',
-                    'button.MuiButtonBase-root.MuiIconButton-root[aria-haspopup="true"][data-border-outline="true"]',
-                    'button.MuiIconButton-root[aria-haspopup="true"][data-border-outline="true"]',
-                    'button.MuiIconButton-root[aria-haspopup="true"]',
-                    'button[aria-haspopup="true"][data-border-outline="true"]',
-                    'button[aria-haspopup="true"]',
-                ];
-                
-                for (const selector of chatButtonSelectors) {
-                    try {
-                        const button = await page.$(selector);
-                        if (button) {
-                            // Verify it's the chat button by checking for the chat icon SVG
-                            const isChatButton = await page.evaluate((btn) => {
-                                const svg = btn.querySelector('svg');
-                                if (!svg) return false;
-                                // Check for the specific chat icon path (matches the exact path from HTML)
-                                const path = svg.querySelector('path[d*="M7.29412"], path[d*="7.29412"], path[d*="M1 8.18823"]');
-                                return path !== null;
-                            }, button);
-                            
-                            if (isChatButton) {
-                                await button.click();
-                                console.log(`[roobet] Successfully clicked live chat button (attempt ${attempt}) using selector: ${selector}`);
-                                chatButtonClicked = true;
-                                await page.waitForTimeout(1500); // Wait for chat panel to open
-                                break;
-                            }
+                const clicked = await page.evaluate(() => {
+                    const buttons = document.querySelectorAll('button[aria-haspopup="true"][data-border-outline="true"]');
+                    for (const btn of buttons) {
+                        const svg = btn.querySelector('svg');
+                        if (!svg) continue;
+                        const path = svg.querySelector('path');
+                        if (!path) continue;
+                        const d = path.getAttribute('d') || '';
+                        // Chat bubble icon from Roobet: path contains this signature
+                        if (d.includes('M7.29412') && d.includes('8.18823')) {
+                            btn.click();
+                            return true;
                         }
-                    } catch (e) {
-                        // Continue to next selector
                     }
+                    return false;
+                });
+
+                if (clicked) {
+                    console.log(`[roobet] Clicked live chat button (attempt ${attempt})`);
+                    chatButtonClicked = true;
+                    await sleep(1500);
+                    break;
                 }
-                
-                if (chatButtonClicked) {
-                    break; // Successfully clicked, exit retry loop
-                }
-                
-                // If not found, wait before retrying
+
                 if (attempt < maxRetries) {
-                    console.log(`[roobet] Live chat button not found, retrying in ${retryDelay/1000} seconds... (attempt ${attempt}/${maxRetries})`);
-                    await page.waitForTimeout(retryDelay);
+                    console.log(`[roobet] Live chat button not found, retrying in ${retryDelay / 1000}s... (${attempt}/${maxRetries})`);
+                    await sleep(retryDelay);
                 }
-                
             } catch (error) {
                 console.log(`[roobet] Error during chat button search (attempt ${attempt}): ${error.message}`);
-                if (attempt < maxRetries) {
-                    await page.waitForTimeout(retryDelay);
-                }
+                if (attempt < maxRetries) await sleep(retryDelay);
             }
         }
-        
+
         if (!chatButtonClicked) {
             console.warn(`[roobet] Could not find or click the live chat button after ${maxRetries} attempts. Continuing anyway...`);
         }
-        
+
         console.log('[roobet] Bootstrap complete');
     },
     async run(page, stopSignal) {
@@ -161,11 +140,11 @@ module.exports = {
                 }
                 
                 // Wait 5 seconds before next scrape
-                await page.waitForTimeout(5000);
+                await sleep(5000);
                 
             } catch (error) {
                 console.error(`[roobet] Error scraping usernames: ${error.message}`);
-                await page.waitForTimeout(5000);
+                await sleep(5000);
             }
         }
         
@@ -177,7 +156,7 @@ module.exports = {
         while (!stopSignal.isSet) {
             try {
                 // Wait a bit before first scrape to ensure chat is open
-                await page.waitForTimeout(2000);
+                await sleep(2000);
                 
                 // Extract usernames from live chat messages
                 const liveChatUsernames = await page.evaluate(() => {
@@ -247,11 +226,11 @@ module.exports = {
                 }
                 
                 // Wait 10 seconds before next scrape
-                await page.waitForTimeout(10000);
+                await sleep(10000);
                 
             } catch (error) {
                 console.error(`[roobet] Error scraping live chat usernames: ${error.message}`);
-                await page.waitForTimeout(10000);
+                await sleep(10000);
             }
         }
         
