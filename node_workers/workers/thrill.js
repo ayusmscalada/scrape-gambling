@@ -1,6 +1,8 @@
 /**
  * Thrill.global Puppeteer worker
  */
+const { sendUsernames } = require('../usernameApiClient');
+
 module.exports = {
     siteKey: 'thrill',
     siteName: 'Thrill',

@@ -11,8 +11,9 @@ log = logging.getLogger(__name__)
 class CommandHandler:
     """Handles console commands for the automation manager."""
     
-    def __init__(self, manager: AutomationManager):
+    def __init__(self, manager: AutomationManager, enrichment_job=None):
         self.manager = manager
+        self.enrichment_job = enrichment_job
     
     async def handle_command(self, command: str) -> Tuple[bool, str]:
         """
@@ -68,12 +69,15 @@ class CommandHandler:
                 return False, "Usage: disable <site>"
             return False, await self._handle_disable(args[0])
         
+        elif cmd == 'enrichment':
+            return False, await self._handle_enrichment(args)
+        
         else:
             return False, f"Unknown command: {cmd}. Type 'help' for available commands."
     
     def _get_help_text(self) -> str:
         """Get help text for available commands."""
-        return """
+        help_text = """
 Available commands:
   help                    - Show this help message
   status                  - Show status of all workers
@@ -85,8 +89,11 @@ Available commands:
   restart <site>          - Restart a worker for a site
   enable <site>           - Enable a site in config
   disable <site>          - Disable a site in config
+  enrichment status       - Show enrichment job status
+  enrichment trigger      - Manually trigger enrichment batch
   exit / quit             - Shutdown all workers and exit
 """
+        return help_text
     
     async def _handle_status(self) -> str:
         """Handle status command."""
@@ -200,3 +207,37 @@ Available commands:
         if site_key in self.manager.workers:
             await self.manager.stop_worker(site_key)
         return f"Disabled {site_key}"
+    
+    async def _handle_enrichment(self, args: List[str]) -> str:
+        """Handle enrichment commands."""
+        if not self.enrichment_job:
+            return "Enrichment job service is not available"
+        
+        if not args:
+            return "Usage: enrichment <status|trigger>"
+        
+        subcmd = args[0].lower()
+        
+        if subcmd == 'status':
+            stats = self.enrichment_job.get_stats()
+            lines = ["\n=== Enrichment Job Status ==="]
+            lines.append(f"Running: {'Yes' if stats.get('is_running') else 'No'}")
+            lines.append(f"Interval: {stats.get('interval_seconds', 'N/A')} seconds")
+            lines.append(f"Batch size: {stats.get('batch_size', 'N/A')}")
+            lines.append("")
+            lines.append("Database Statistics:")
+            lines.append(f"  Total raw_players: {stats.get('total_raw_players', 0)}")
+            lines.append(f"  Enriched: {stats.get('enriched_count', 0)}")
+            lines.append(f"  Unchecked: {stats.get('unchecked_count', 0)}")
+            lines.append("")
+            return "\n".join(lines)
+        
+        elif subcmd == 'trigger':
+            success = self.enrichment_job.trigger_now()
+            if success:
+                return "Enrichment batch triggered successfully"
+            else:
+                return "Failed to trigger enrichment batch (service may not be running)"
+        
+        else:
+            return f"Unknown enrichment command: {subcmd}. Use 'enrichment status' or 'enrichment trigger'"

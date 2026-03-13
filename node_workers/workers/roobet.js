@@ -1,6 +1,8 @@
 /**
  * Roobet.com Puppeteer worker
  */
+const { sendUsernames } = require('../usernameApiClient');
+
 module.exports = {
     siteKey: 'roobet',
     siteName: 'Roobet',
@@ -156,6 +158,12 @@ module.exports = {
                     usernames.forEach(item => {
                         console.log(`  [${item.index}] ${item.username}`);
                     });
+                    
+                    // Send usernames to API
+                    const apiResult = await sendUsernames('roobet', usernames);
+                    if (apiResult.success) {
+                        console.log(`[roobet] Sent ${apiResult.added} usernames to API (${apiResult.skipped} skipped)`);
+                    }
                 } else {
                     console.log('[roobet] No usernames found in activity feed');
                 }
@@ -242,6 +250,12 @@ module.exports = {
                     liveChatUsernames.forEach(item => {
                         console.log(`  [${item.index}] ${item.username}`);
                     });
+                    
+                    // Send usernames to API
+                    const apiResult = await sendUsernames('roobet', liveChatUsernames);
+                    if (apiResult.success) {
+                        console.log(`[roobet] Sent ${apiResult.added} live chat usernames to API (${apiResult.skipped} skipped)`);
+                    }
                 } else {
                     console.log('[roobet] No usernames found in live chat');
                 }

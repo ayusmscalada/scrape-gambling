@@ -2,7 +2,7 @@
 SQLAlchemy database models.
 """
 
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -29,6 +29,7 @@ class RawPlayer(Base):
     
     __table_args__ = (
         Index("idx_username_source", "username", "source_site"),
+        UniqueConstraint("username", "source_site", name="uq_raw_players_username_source"),
     )
 
 

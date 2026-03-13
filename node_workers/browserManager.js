@@ -12,9 +12,14 @@ const fs = require('fs');
 if (!process.env.PUPPETEER_CACHE_DIR) {
     const os = require('os');
     const isDocker = fs.existsSync('/.dockerenv');
-    process.env.PUPPETEER_CACHE_DIR = isDocker 
+    const cacheDir = isDocker 
         ? '/app/.puppeteer-cache' 
         : path.join(os.homedir(), '.cache', 'puppeteer');
+    process.env.PUPPETEER_CACHE_DIR = cacheDir;
+    // Also set for Puppeteer to use
+    if (!process.env.PUPPETEER_CACHE_DIR) {
+        process.env.PUPPETEER_CACHE_DIR = cacheDir;
+    }
 }
 
 class BrowserManager {
@@ -126,7 +131,9 @@ class BrowserManager {
             };
 
             // Log cache directory and verify browser exists
-            const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/app/.puppeteer-cache';
+            const os = require('os');
+            const isDocker = fs.existsSync('/.dockerenv');
+            const cacheDir = process.env.PUPPETEER_CACHE_DIR || (isDocker ? '/app/.puppeteer-cache' : path.join(os.homedir(), '.cache', 'puppeteer'));
             console.log(`[${siteKey}] Launching browser (cache dir: ${cacheDir})`);
             
             // Try to get executable path for debugging
@@ -134,9 +141,13 @@ class BrowserManager {
                 const executablePath = puppeteer.executablePath();
                 console.log(`[${siteKey}] Browser executable: ${executablePath}`);
                 if (!fs.existsSync(executablePath)) {
-                    throw new Error(`Browser executable not found at: ${executablePath}. Run: npx puppeteer browsers install chromium`);
+                    throw new Error(`Browser executable not found at: ${executablePath}. Run: npx puppeteer browsers install chrome`);
                 }
             } catch (e) {
+                // If executablePath() throws, it means browser is not installed
+                if (e.message.includes('not found') || e.message.includes('Could not find')) {
+                    throw new Error(`Chrome browser not installed. Please run: npx puppeteer browsers install chrome. Error: ${e.message}`);
+                }
                 console.warn(`[${siteKey}] Could not verify browser executable: ${e.message}`);
             }
 

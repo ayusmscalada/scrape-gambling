@@ -53,7 +53,7 @@ sites:
   thrill:
     key: thrill
     name: Thrill
-    url: https://www.thrill.global/en/casino/
+    url: https://www.thrill.com/casino
     enabled: true
     headless: false
     channel: chromium
