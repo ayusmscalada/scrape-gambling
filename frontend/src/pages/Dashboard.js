@@ -15,11 +15,20 @@ function Dashboard() {
 
   useEffect(() => {
     // Connect WebSocket
+    console.log('Dashboard: Initializing WebSocket connection...');
     websocketService.connect();
-    setWsConnected(websocketService.isConnected());
+    
+    // Check initial connection status (will be updated by event handlers)
+    const checkConnection = () => {
+      const connected = websocketService.isConnected();
+      setWsConnected(connected);
+      console.log('Dashboard: Initial WebSocket status:', connected ? 'connected' : 'disconnected');
+    };
+    checkConnection();
 
     // Listen for connection status
     const handleConnection = (connected) => {
+      console.log('Dashboard: WebSocket connection status changed:', connected ? 'connected' : 'disconnected');
       setWsConnected(connected);
     };
 
@@ -105,12 +114,12 @@ function Dashboard() {
           >
             Raw Players
           </button>
-          <button
+          {/* <button
             className={`tab ${activeTab === 'qualified-leads' ? 'active' : ''}`}
             onClick={() => setActiveTab('qualified-leads')}
           >
             Qualified Leads
-          </button>
+          </button> */}
           <button
             className={`tab ${activeTab === 'identity-matches' ? 'active' : ''}`}
             onClick={() => setActiveTab('identity-matches')}
@@ -121,7 +130,7 @@ function Dashboard() {
 
         <div className="tab-content">
           {activeTab === 'raw-players' && <RawPlayersTable />}
-          {activeTab === 'qualified-leads' && <QualifiedLeadsTable />}
+          {/* {activeTab === 'qualified-leads' && <QualifiedLeadsTable />} */}
           {activeTab === 'identity-matches' && <IdentityMatchesTable />}
         </div>
       </div>

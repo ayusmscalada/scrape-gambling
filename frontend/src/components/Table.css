@@ -156,3 +156,40 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.enrichment-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.enrichment-badge.enriched {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+}
+
+.enrichment-badge.pending {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+}
+
+.platform-match {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.score-badge.small {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.text-muted {
+  color: #64748b;
+  font-size: 14px;
+}

@@ -16,94 +16,27 @@ def score_candidate(
     evidence: Evidence
 ) -> ScoreResult:
     """
-    Score a candidate match based on evidence.
+    Score a candidate match - binary scoring: 100 if found, 0 if not found.
     
-    Scoring rules:
-    - exact username match: +30
-    - strong username variant match: +20
-    - same/similar avatar or profile image URL pattern: +25
-    - same platform mentioned in bio/post/page: +20
-    - same referral code / creator link / wallet mention: +40
-    - similar language/timezone/region clues: +10
-    - inconsistent country/language/profile type: -15
-    - no evidence beyond username similarity: -20
+    Simple binary scoring:
+    - If profile found on platform: score = 100
+    - If profile not found on platform: score = 0
     
     Args:
-        source_username: Original username
-        variants: Generated username variants
+        source_username: Original username (not used in binary scoring)
+        variants: Generated username variants (not used in binary scoring)
         evidence: Extracted evidence
         
     Returns:
-        ScoreResult with match score and reasons
+        ScoreResult with match score = 100 (always, since if we have evidence, profile was found)
     """
-    score = 0
-    reasons: List[str] = []
-    
-    source_lower = source_username.lower()
-    handle_lower = evidence.social_handle.lower()
-    
-    # Username matching
-    if handle_lower == source_lower:
-        score += 30
-        reasons.append("exact username match +30")
-    elif handle_lower in variants:
-        score += 20
-        reasons.append(f"strong username variant match +20")
-    elif _is_similar_username(source_lower, handle_lower):
-        score += 15
-        reasons.append("similar username pattern +15")
-    else:
-        score -= 20
-        reasons.append("no evidence beyond username similarity -20")
-    
-    # Avatar/profile image (if we have it)
-    if evidence.avatar_url:
-        score += 25
-        reasons.append("public avatar/profile image available +25")
-    
-    # Platform mentions
-    if evidence.platform_mentions:
-        score += 20
-        reasons.append(f"platform mention in bio ({', '.join(evidence.platform_mentions[:3])}) +20")
-    
-    # Referral codes / creator links / wallet mentions
-    if evidence.referral_codes:
-        score += 40
-        reasons.append(f"referral/creator code found ({len(evidence.referral_codes)} codes) +40")
-    
-    if evidence.wallet_mentions:
-        score += 40
-        reasons.append(f"wallet mention found ({len(evidence.wallet_mentions)} mentions) +40")
-    
-    if evidence.creator_links:
-        score += 40
-        reasons.append(f"creator link found ({len(evidence.creator_links)} links) +40")
-    
-    # Language/region clues
-    if evidence.language_clues:
-        score += 10
-        reasons.append(f"language clues found ({', '.join(evidence.language_clues)}) +10")
-    
-    if evidence.region_clues:
-        score += 10
-        reasons.append(f"region clues found ({', '.join(evidence.region_clues)}) +10")
-    
-    # Clamp score to reasonable range
-    score = max(0, min(100, score))
-    
-    # Determine confidence label
-    if score >= 70:
-        confidence_label = "exact match"
-    elif score >= 50:
-        confidence_label = "likely match"
-    elif score >= 30:
-        confidence_label = "weak match"
-    else:
-        confidence_label = "no reliable match"
+    # Binary scoring: if we have evidence, the profile was found = 100
+    score = 100
+    reasons = ["Profile found on platform +100"]
     
     return ScoreResult(
         match_score=score,
-        confidence_label=confidence_label,
+        confidence_label="found",
         scoring_reasons=reasons,
         evidence=evidence,
     )

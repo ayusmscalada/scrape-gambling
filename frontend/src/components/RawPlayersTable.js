@@ -82,30 +82,28 @@ function RawPlayersTable() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>ID</th>
+              <th>Site</th>
               <th>Username</th>
-              <th>Platform</th>
+              <th>Rank</th>
               <th>Captured At</th>
-              <th>Created At</th>
             </tr>
           </thead>
           <tbody>
             {players.length === 0 ? (
               <tr>
-                <td colSpan="5" className="table-empty">
+                <td colSpan="4" className="table-empty">
                   No players found
                 </td>
               </tr>
             ) : (
               players.map((player) => (
                 <tr key={player.id}>
-                  <td>{player.id}</td>
-                  <td className="username-cell">{player.username}</td>
                   <td>
-                    <span className="platform-badge">{player.source_site || 'N/A'}</span>
+                    <span className="platform-badge">{player.site || 'N/A'}</span>
                   </td>
+                  <td className="username-cell">{player.username}</td>
+                  <td>{player.rank !== null && player.rank !== undefined ? player.rank : '-'}</td>
                   <td>{formatDate(player.captured_at)}</td>
-                  <td>{formatDate(player.created_at)}</td>
                 </tr>
               ))
             )}

@@ -16,14 +16,14 @@ import time
 from typing import Optional, List
 
 from app.enrich.schemas import EnrichmentResult, CandidateMatch
-from app.enrich.normalize import normalize_username, build_search_queries
 from app.enrich.search import discover_candidates
 from app.enrich.extract import extract_candidate_evidence
 from app.enrich.score import score_candidate
 from app.enrich.classify import classify_candidate, classify_lead
 from app.enrich.output import render_console_report, save_json_report
 from app.db.session import db_session
-from app.db.repositories import EnrichmentRepository
+from app.db.repositories import RawPlayerRepository
+from app.services.identity_enrichment import create_identity_match
 from app.config import settings
 
 # ── logging setup ─────────────────────────────────────────────────────────────
@@ -80,28 +80,24 @@ def enrich_username(
     """
     log.info(f"Starting enrichment for username: {username}")
     
-    # Stage A: Normalization
-    log.info("Stage A: Normalizing username and generating variants...")
-    variants = normalize_username(username)
-    queries = build_search_queries(username, variants)
-    log.info(f"Generated {len(variants)} variants, {len(queries)} search queries")
-    
-    # Stage B: Discovery
-    log.info("Stage B: Discovering public candidates...")
-    candidates = discover_candidates(queries, max_results=max_results)
+    # Stage A: Discovery
+    log.info("Stage A: Discovering public candidates...")
+    # Check original username only
+    usernames_to_check = [username]
+    candidates = discover_candidates(usernames_to_check, max_results=max_results)
     log.info(f"Discovered {len(candidates)} candidate profiles")
     
-    # Stage C & D: Extraction and Scoring
-    log.info("Stage C & D: Extracting evidence and scoring matches...")
+    # Stage B: Extraction and Scoring
+    log.info("Stage B: Extracting evidence and scoring matches...")
     candidate_matches: List[CandidateMatch] = []
     
     for candidate in candidates:
         try:
-            # Extract evidence
-            evidence = extract_candidate_evidence(candidate, username, variants)
+            # Extract evidence (no variants needed)
+            evidence = extract_candidate_evidence(candidate, username, [])
             
-            # Score candidate
-            score_result = score_candidate(username, variants, evidence)
+            # Score candidate (no variants needed)
+            score_result = score_candidate(username, [], evidence)
             
             # Classify candidate
             confidence_label = classify_candidate(score_result, evidence)
@@ -132,8 +128,8 @@ def enrich_username(
     # Sort by match score (descending)
     candidate_matches.sort(key=lambda x: x.match_score, reverse=True)
     
-    # Stage E: Classification
-    log.info("Stage E: Classifying lead...")
+    # Stage C: Classification
+    log.info("Stage C: Classifying lead...")
     best_match = candidate_matches[0] if candidate_matches else None
     final_classification = classify_lead(best_match)
     
@@ -141,7 +137,7 @@ def enrich_username(
     result = EnrichmentResult(
         input_username=username,
         source_site=source_site,
-        variants=variants,
+        variants=[],  # No variants used
         candidates=candidate_matches,
         best_match=best_match,
         final_classification=final_classification,
@@ -221,8 +217,40 @@ Examples:
         if not args.no_save:
             try:
                 with db_session() as session:
-                    raw_player = EnrichmentRepository.save_result(session, result)
-                    log.info(f"Saved enrichment result to PostgreSQL (raw_player_id: {raw_player.id})")
+                    # Create or get raw player
+                    raw_player = RawPlayerRepository.get_by_site_username(
+                        session, 
+                        site=args.source_site or 'unknown',
+                        username=args.username
+                    )
+                    if not raw_player:
+                        raw_player = RawPlayerRepository.create(
+                            session,
+                            site=args.source_site or 'unknown',
+                            username=args.username
+                        )
+                    
+                    # Build socials dictionary from enrichment result
+                    found_platforms = {c.platform.lower(): c for c in result.candidates}
+                    socials = {
+                        'telegram_url': found_platforms.get('telegram').social_url if 'telegram' in found_platforms else None,
+                        'instagram_url': found_platforms.get('instagram').social_url if 'instagram' in found_platforms else None,
+                        'x_url': found_platforms.get('x').social_url if 'x' in found_platforms else None,
+                        'youtube_url': found_platforms.get('youtube').social_url if 'youtube' in found_platforms else None,
+                    }
+                    
+                    # Create identity match
+                    identity_match = create_identity_match(
+                        session,
+                        raw_player_id=raw_player.id,
+                        socials=socials
+                    )
+                    
+                    session.commit()
+                    if identity_match:
+                        log.info(f"Saved enrichment result to PostgreSQL (raw_player_id: {raw_player.id}, identity_match_id: {identity_match.id})")
+                    else:
+                        log.info(f"Saved raw player but no identity match created (total_score=0) (raw_player_id: {raw_player.id})")
             except Exception as e:
                 log.error(f"Failed to save to PostgreSQL: {e}")
                 if args.verbose:

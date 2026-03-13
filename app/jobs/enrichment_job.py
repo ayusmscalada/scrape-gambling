@@ -4,18 +4,18 @@ Background job service for enriching raw_players with social media data.
 
 import logging
 import time
+import threading
 from typing import Optional, List
-from datetime import datetime
+from uuid import UUID
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.jobstores.memory import MemoryJobStore
 
 from app.db.session import db_session
-from app.db.models import RawPlayer, IdentityMatch, QualifiedLead
-from app.db.repositories import EnrichmentRepository
+from app.db.models import RawPlayer, IdentityMatch
+from app.services.identity_enrichment import create_identity_match
 from scan_socials import enrich_username
 
 log = logging.getLogger(__name__)
@@ -30,7 +30,8 @@ class EnrichmentJobService:
         self,
         interval_seconds: int = 60,
         batch_size: int = 10,
-        max_results: int = 20
+        max_results: int = 20,
+        socketio=None
     ):
         """
         Initialize the enrichment job service.
@@ -39,10 +40,12 @@ class EnrichmentJobService:
             interval_seconds: How often to run the enrichment job (default: 60 seconds)
             batch_size: How many raw_players to process per run (default: 10)
             max_results: Maximum candidates to discover per username (default: 20)
+            socketio: Optional Flask-SocketIO instance for emitting WebSocket events
         """
         self.interval_seconds = interval_seconds
         self.batch_size = batch_size
         self.max_results = max_results
+        self.socketio = socketio
         self.scheduler = None
         self.is_running = False
         
@@ -50,9 +53,7 @@ class EnrichmentJobService:
         """
         Get raw_players that haven't been enriched yet.
         
-        A raw_player is considered "unchecked" if:
-        - It has no identity_matches, AND
-        - It has no qualified_lead
+        A raw_player is considered "unchecked" if it doesn't have an identity_match.
         
         Args:
             db: Database session
@@ -62,41 +63,34 @@ class EnrichmentJobService:
             List of RawPlayer objects
         """
         try:
-            # Find raw_players that have no identity_matches and no qualified_lead
-            # Using LEFT JOIN and checking for NULL
+            # Find raw_players without identity_match
             unchecked = db.query(RawPlayer).outerjoin(
                 IdentityMatch, RawPlayer.id == IdentityMatch.raw_player_id
-            ).outerjoin(
-                QualifiedLead, RawPlayer.id == QualifiedLead.raw_player_id
             ).filter(
-                and_(
-                    IdentityMatch.id.is_(None),
-                    QualifiedLead.id.is_(None)
-                )
+                IdentityMatch.id.is_(None)
             ).order_by(
                 RawPlayer.captured_at.asc()  # Process oldest first
             ).limit(limit).all()
             
             return unchecked
         except Exception as e:
-            # Handle case where tables don't exist yet
             if "does not exist" in str(e) or "UndefinedTable" in str(e):
                 log.warning("Database tables not found. Please run migrations first: alembic upgrade head")
                 return []
             raise
     
-    def _enrich_raw_player(self, raw_player_id: int) -> bool:
+    def _enrich_raw_player(self, raw_player_id: UUID) -> bool:
         """
         Enrich a single raw_player with social media data.
         
         Args:
-            raw_player_id: ID of RawPlayer to enrich
+            raw_player_id: UUID of RawPlayer to enrich
             
         Returns:
             True if enrichment was successful, False otherwise
         """
         try:
-            # Get raw_player in a new session and access attributes while session is active
+            # Get raw_player and extract data
             with db_session() as session:
                 raw_player = session.query(RawPlayer).filter(
                     RawPlayer.id == raw_player_id
@@ -106,82 +100,77 @@ class EnrichmentJobService:
                     log.warning(f"RawPlayer {raw_player_id} not found in database")
                     return False
                 
-                # Check if already enriched (race condition check)
-                has_matches = session.query(IdentityMatch).filter(
-                    IdentityMatch.raw_player_id == raw_player.id
-                ).first() is not None
-                
-                has_lead = session.query(QualifiedLead).filter(
-                    QualifiedLead.raw_player_id == raw_player.id
-                ).first() is not None
-                
-                if has_matches or has_lead:
-                    log.info(f"RawPlayer {raw_player.id} already enriched, skipping")
+                # Check if already enriched
+                if raw_player.identity_match:
                     return True
                 
-                # Access attributes while session is active
+                # Extract data while session is active
                 username = raw_player.username
-                source_site = raw_player.source_site
-                
-                log.info(f"Enriching raw_player {raw_player.id}: {username} (source: {source_site})")
+                site = raw_player.site
             
             # Run enrichment outside of session (this can take time)
             result = enrich_username(
                 username=username,
-                source_site=source_site,
+                source_site=site,
                 max_results=self.max_results
             )
             
-            # Save results to database in a new session
+            # Build socials dictionary from enrichment result
+            found_platforms = {c.platform.lower(): c for c in result.candidates}
+            socials = {
+                'telegram_url': found_platforms.get('telegram').social_url if 'telegram' in found_platforms else None,
+                'instagram_url': found_platforms.get('instagram').social_url if 'instagram' in found_platforms else None,
+                'x_url': found_platforms.get('x').social_url if 'x' in found_platforms else None,
+                'youtube_url': found_platforms.get('youtube').social_url if 'youtube' in found_platforms else None,
+            }
+            
+            # Create identity match using the service
             with db_session() as session:
-                # Get the raw_player again in this session
-                db_raw_player = session.query(RawPlayer).filter(
-                    RawPlayer.id == raw_player_id
-                ).first()
-                
-                if not db_raw_player:
-                    log.warning(f"RawPlayer {raw_player_id} not found in database")
-                    return False
-                
-                # Double-check if enriched while we were running (race condition)
-                has_matches = session.query(IdentityMatch).filter(
-                    IdentityMatch.raw_player_id == db_raw_player.id
-                ).first() is not None
-                
-                has_lead = session.query(QualifiedLead).filter(
-                    QualifiedLead.raw_player_id == db_raw_player.id
-                ).first() is not None
-                
-                if has_matches or has_lead:
-                    log.info(f"RawPlayer {db_raw_player.id} already enriched (race condition), skipping")
-                    return True
-                
-                # Create identity matches from enrichment result
-                if result.candidates:
-                    from app.db.repositories import IdentityMatchRepository
-                    IdentityMatchRepository.create_batch(
-                        db=session,
-                        raw_player_id=db_raw_player.id,
-                        candidates=result.candidates,
-                    )
-                    log.info(f"Created {len(result.candidates)} identity matches for {username}")
-                
-                # Create/update qualified lead
-                from app.db.repositories import QualifiedLeadRepository
-                notes = None
-                if result.best_match:
-                    notes = f"Best match: {result.best_match.platform} @{result.best_match.social_handle}"
-                
-                QualifiedLeadRepository.create_or_update(
+                identity_match = create_identity_match(
                     db=session,
-                    raw_player_id=db_raw_player.id,
-                    best_candidate=result.best_match,
-                    final_classification=result.final_classification,
-                    notes=notes,
+                    raw_player_id=raw_player_id,
+                    socials=socials
                 )
                 
-                session.commit()
-                log.info(f"Enrichment complete for {username}: {result.final_classification}")
+                if identity_match:
+                    session.commit()
+                    log.info(f"✓ {username} ({site}): total_score={identity_match.total_score}")
+                    
+                    # Emit WebSocket events
+                    if self.socketio:
+                        try:
+                            self.socketio.emit('identity_match_created', {
+                                'id': str(identity_match.id),
+                                'raw_player_id': str(identity_match.raw_player_id),
+                                'username': username,
+                                'site': site,
+                                'telegram_url': identity_match.telegram_url,
+                                'instagram_url': identity_match.instagram_url,
+                                'x_url': identity_match.x_url,
+                                'youtube_url': identity_match.youtube_url,
+                                'total_score': identity_match.total_score,
+                                'created_at': identity_match.created_at.isoformat() if identity_match.created_at else None,
+                            })
+                            
+                            # Emit stats update
+                            from sqlalchemy import func
+                            stats = {
+                                'total_raw_players': session.query(RawPlayer).count(),
+                                'total_identity_matches': session.query(IdentityMatch).count(),
+                                'by_site': {
+                                    site: count for site, count in
+                                    session.query(RawPlayer.site, func.count(RawPlayer.id).label('count'))
+                                    .group_by(RawPlayer.site).all()
+                                    if site
+                                }
+                            }
+                            self.socketio.emit('stats_updated', stats)
+                        except Exception as e:
+                            log.warning(f"Failed to emit WebSocket events: {e}")
+                else:
+                    session.commit()
+                    log.debug(f"No identity match created for {username} ({site}): total_score=0")
+                
                 return True
                 
         except Exception as e:
@@ -197,38 +186,29 @@ class EnrichmentJobService:
             return
         
         try:
-            log.info(f"Starting enrichment batch (batch_size: {self.batch_size})")
-            
-            # Get unchecked raw_players
+            # Get unchecked raw_players and extract IDs
             with db_session() as session:
                 unchecked = self._get_unchecked_raw_players(session, limit=self.batch_size)
+                unchecked_ids = [p.id for p in unchecked]
             
-            if not unchecked:
-                log.debug("No unchecked raw_players found")
+            if not unchecked_ids:
                 return
             
-            log.info(f"Found {len(unchecked)} unchecked raw_players to enrich")
-            
             # Process each raw_player
-            success_count = 0
-            error_count = 0
-            
-            for raw_player in unchecked:
+            success_count = error_count = 0
+            for raw_player_id in unchecked_ids:
                 if not self.is_running:
-                    log.info("Job service stopped, aborting batch processing")
                     break
                 
-                # Pass only the ID to avoid session issues
-                success = self._enrich_raw_player(raw_player.id)
-                if success:
+                if self._enrich_raw_player(raw_player_id):
                     success_count += 1
                 else:
                     error_count += 1
                 
-                # Small delay between enrichments to avoid rate limiting
-                time.sleep(2)
+                time.sleep(2)  # Rate limiting
             
-            log.info(f"Batch complete: {success_count} succeeded, {error_count} failed")
+            if success_count > 0 or error_count > 0:
+                log.info(f"Batch: {success_count} enriched, {error_count} failed")
             
         except Exception as e:
             log.error(f"Error in enrichment batch processing: {e}", exc_info=True)
@@ -239,7 +219,7 @@ class EnrichmentJobService:
             log.warning("Enrichment job service is already running")
             return
         
-        log.info(f"Starting enrichment job service (interval: {self.interval_seconds}s, batch_size: {self.batch_size})")
+        log.info(f"Enrichment job: {self.interval_seconds}s interval, batch_size={self.batch_size}")
         
         # Configure scheduler
         jobstores = {
@@ -249,8 +229,8 @@ class EnrichmentJobService:
             'default': ThreadPoolExecutor(1)  # Single thread to avoid database conflicts
         }
         job_defaults = {
-            'coalesce': True,  # Combine multiple pending jobs into one
-            'max_instances': 1,  # Only one instance running at a time
+            'coalesce': True,
+            'max_instances': 1,
         }
         
         self.scheduler = BackgroundScheduler(
@@ -273,11 +253,13 @@ class EnrichmentJobService:
         self.is_running = True
         self.scheduler.start()
         
-        # Run initial batch immediately
-        log.info("Running initial enrichment batch...")
-        self._process_batch()
-        
-        log.info("Enrichment job service started successfully")
+        # Run initial batch in a background thread
+        initial_thread = threading.Thread(
+            target=self._process_batch,
+            daemon=True,
+            name="InitialEnrichmentBatch"
+        )
+        initial_thread.start()
     
     def stop(self):
         """Stop the background job scheduler."""
@@ -310,20 +292,7 @@ class EnrichmentJobService:
             with db_session() as session:
                 try:
                     total_raw_players = session.query(RawPlayer).count()
-                    
-                    # Count enriched (have identity_matches or qualified_lead)
-                    enriched_count = session.query(RawPlayer).outerjoin(
-                        IdentityMatch, RawPlayer.id == IdentityMatch.raw_player_id
-                    ).outerjoin(
-                        QualifiedLead, RawPlayer.id == QualifiedLead.raw_player_id
-                    ).filter(
-                        or_(
-                            IdentityMatch.id.isnot(None),
-                            QualifiedLead.id.isnot(None)
-                        )
-                    ).count()
-                    
-                    unchecked_count = total_raw_players - enriched_count
+                    enriched_count = session.query(IdentityMatch).count()
                     
                     return {
                         'is_running': self.is_running,
@@ -331,11 +300,9 @@ class EnrichmentJobService:
                         'batch_size': self.batch_size,
                         'total_raw_players': total_raw_players,
                         'enriched_count': enriched_count,
-                        'unchecked_count': unchecked_count,
-                        'next_run': None  # Could add next run time if needed
+                        'unchecked_count': total_raw_players - enriched_count,
                     }
                 except Exception as db_error:
-                    # Handle case where tables don't exist yet
                     if "does not exist" in str(db_error) or "UndefinedTable" in str(db_error):
                         return {
                             'is_running': self.is_running,
@@ -349,7 +316,4 @@ class EnrichmentJobService:
                     raise
         except Exception as e:
             log.error(f"Error getting stats: {e}")
-            return {
-                'is_running': self.is_running,
-                'error': str(e)
-            }
+            return {'is_running': self.is_running, 'error': str(e)}

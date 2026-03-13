@@ -29,27 +29,17 @@ function IdentityMatchesTable() {
     loadMatches();
 
     // Listen for identity match updates via WebSocket
-    const handleIdentityMatchAdded = (data) => {
+    const handleIdentityMatchCreated = (data) => {
       setMatches((prev) => [data, ...prev.slice(0, pageSize - 1)]);
       setTotal((prev) => prev + 1);
     };
 
-    websocketService.on('identity_match_added', handleIdentityMatchAdded);
+    websocketService.on('identity_match_created', handleIdentityMatchCreated);
 
     return () => {
-      websocketService.off('identity_match_added', handleIdentityMatchAdded);
+      websocketService.off('identity_match_created', handleIdentityMatchCreated);
     };
   }, [page, pageSize]);
-
-  const getPlatformIcon = (platform) => {
-    const icons = {
-      telegram: '✈️',
-      instagram: '📷',
-      x: '🐦',
-      youtube: '📺',
-    };
-    return icons[platform.toLowerCase()] || '🔗';
-  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -92,59 +82,84 @@ function IdentityMatchesTable() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>ID</th>
               <th>Username</th>
-              <th>Platform</th>
-              <th>Social Handle</th>
-              <th>Social URL</th>
-              <th>Match Score</th>
-              <th>Confidence</th>
-              <th>Contact</th>
+              <th>Telegram URL</th>
+              <th>Instagram URL</th>
+              <th>X URL</th>
+              <th>YouTube URL</th>
+              <th>Total Score</th>
               <th>Created At</th>
             </tr>
           </thead>
           <tbody>
             {matches.length === 0 ? (
               <tr>
-                <td colSpan="9" className="table-empty">
+                <td colSpan="7" className="table-empty">
                   No identity matches found
                 </td>
               </tr>
             ) : (
               matches.map((match) => (
                 <tr key={match.id}>
-                  <td>{match.id}</td>
                   <td className="username-cell">{match.username}</td>
                   <td>
-                    <span className="platform-badge">
-                      {getPlatformIcon(match.platform)} {match.platform}
-                    </span>
-                  </td>
-                  <td>@{match.social_handle}</td>
-                  <td>
-                    <a
-                      href={match.social_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="social-link"
-                    >
-                      View Profile
-                    </a>
-                  </td>
-                  <td>
-                    <span className="score-badge">{match.match_score}</span>
-                  </td>
-                  <td>
-                    <span className="confidence-badge">{match.confidence_label}</span>
-                  </td>
-                  <td className="contact-value">
-                    {match.public_contact_type && match.public_contact_value ? (
-                      <span>
-                        {match.public_contact_type}: {match.public_contact_value}
-                      </span>
+                    {match.telegram_url ? (
+                      <a
+                        href={match.telegram_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="social-link"
+                      >
+                        {match.telegram_url}
+                      </a>
                     ) : (
-                      'N/A'
+                      <span className="text-muted">-</span>
                     )}
+                  </td>
+                  <td>
+                    {match.instagram_url ? (
+                      <a
+                        href={match.instagram_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="social-link"
+                      >
+                        {match.instagram_url}
+                      </a>
+                    ) : (
+                      <span className="text-muted">-</span>
+                    )}
+                  </td>
+                  <td>
+                    {match.x_url ? (
+                      <a
+                        href={match.x_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="social-link"
+                      >
+                        {match.x_url}
+                      </a>
+                    ) : (
+                      <span className="text-muted">-</span>
+                    )}
+                  </td>
+                  <td>
+                    {match.youtube_url ? (
+                      <a
+                        href={match.youtube_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="social-link"
+                      >
+                        {match.youtube_url}
+                      </a>
+                    ) : (
+                      <span className="text-muted">-</span>
+                    )}
+                  </td>
+                  <td>
+                    <span className="score-badge">{match.total_score}</span>
                   </td>
                   <td>{formatDate(match.created_at)}</td>
                 </tr>
