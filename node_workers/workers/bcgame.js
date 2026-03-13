@@ -1,3 +1,5 @@
+// const { sleep } = require('../utils');
+
 /**
  * BC.Game Puppeteer worker
  */
@@ -7,66 +9,48 @@ module.exports = {
     siteUrl: 'https://bc.game',
     async bootstrap(page) {
         console.log('[bcgame] Bootstrapping BC.Game page...');
-        await page.waitForTimeout(2000); // Wait for page to load
-        
-        // Click the live chat button (just after page load)
-        // Retry every few seconds if button is not found or can't be clicked
+        // await sleep(2000);
+        await page.waitForTimeout(2000);
+
+        // Click the live chat button: button containing div.color_icon_img.chat (same pattern as roobet)
         console.log('[bcgame] Looking for live chat button...');
-        const maxRetries = 10; // Try for up to 20 seconds (10 retries * 2 seconds)
-        const retryDelay = 2000; // Wait 2 seconds between retries
+        const maxRetries = 10;
+        const retryDelay = 2000;
         let chatButtonClicked = false;
-        
+
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                // Try multiple selectors to find the chat button
-                const chatButtonSelectors = [
-                    'button.button.button-m.size-10.p-0',
-                    'button.button-m.size-10',
-                    'button.button.size-10',
-                    'button[class*="button"][class*="size-10"]',
-                ];
-                
-                for (const selector of chatButtonSelectors) {
-                    try {
-                        const button = await page.$(selector);
-                        if (button) {
-                            // Verify it's the chat button by checking for the chat icon div
-                            const isChatButton = await page.evaluate((btn) => {
-                                const chatIcon = btn.querySelector('div.color_icon_img.chat');
-                                return chatIcon !== null;
-                            }, button);
-                            
-                            if (isChatButton) {
-                                await button.click();
-                                console.log(`[bcgame] Successfully clicked live chat button (attempt ${attempt}) using selector: ${selector}`);
-                                chatButtonClicked = true;
-                                await page.waitForTimeout(1500); // Wait for chat panel to open
-                                break;
-                            }
+                const clicked = await page.evaluate(() => {
+                    const buttons = document.querySelectorAll('button');
+                    for (const btn of buttons) {
+                        const chatIcon = btn.querySelector('div.color_icon_img.chat');
+                        if (chatIcon) {
+                            btn.click();
+                            return true;
                         }
-                    } catch (e) {
-                        // Continue to next selector
                     }
+                    return false;
+                });
+
+                if (clicked) {
+                    console.log(`[bcgame] Clicked live chat button (attempt ${attempt})`);
+                    chatButtonClicked = true;
+                    // await sleep(1500);
+                    await page.waitForTimeout(1500);
+                    break;
                 }
-                
-                if (chatButtonClicked) {
-                    break; // Successfully clicked, exit retry loop
-                }
-                
-                // If not found, wait before retrying
+
                 if (attempt < maxRetries) {
-                    console.log(`[bcgame] Live chat button not found or couldn't be clicked, retrying in ${retryDelay/1000} seconds... (attempt ${attempt}/${maxRetries})`);
+                    console.log(`[bcgame] Live chat button not found, retrying in ${retryDelay / 1000}s... (${attempt}/${maxRetries})`);
+                    // await sleep(retryDelay);
                     await page.waitForTimeout(retryDelay);
                 }
-                
             } catch (error) {
                 console.log(`[bcgame] Error during chat button search (attempt ${attempt}): ${error.message}`);
-                if (attempt < maxRetries) {
-                    await page.waitForTimeout(retryDelay);
-                }
+                if (attempt < maxRetries) await page.waitForTimeout(retryDelay);
             }
         }
-        
+
         if (!chatButtonClicked) {
             console.warn(`[bcgame] Could not find or click the live chat button after ${maxRetries} attempts. Continuing anyway...`);
         }
@@ -90,7 +74,8 @@ module.exports = {
                 
                 // Simulate mouse wheel scroll down
                 await page.mouse.wheel({ deltaY: 1000 });
-                await page.waitForTimeout(300); // Wait for content to load
+                // await sleep(300); // Wait for content to load
+                await page.waitForTimeout(300);
                 
                 // Check new scroll position
                 currentScrollTop = await page.evaluate(() => {
@@ -114,11 +99,13 @@ module.exports = {
             // Perform a few extra scrolls to ensure we're at the very bottom
             for (let i = 0; i < 5; i++) {
                 await page.mouse.wheel({ deltaY: 500 });
+                // await sleep(200);
                 await page.waitForTimeout(200);
             }
             
             // Wait 5 seconds after scrolling to end
             console.log('[bcgame] Waiting 5 seconds after reaching end of page...');
+            // await sleep(5000);
             await page.waitForTimeout(5000);
             
             // Now scroll back up to "All Bingo Games" section
@@ -175,10 +162,12 @@ module.exports = {
                 }, targetElementInfo.scrollY);
                 
                 // Wait for scroll to complete
+                // await sleep(1000);
                 await page.waitForTimeout(1000);
                 
                 // Move mouse to center of the div and use mouse wheel for fine adjustment
                 await page.mouse.move(targetElementInfo.x, targetElementInfo.y);
+                // await sleep(500);
                 await page.waitForTimeout(500);
                 
                 console.log('[bcgame] Scrolled up to "All Bingo Games" section');
@@ -190,6 +179,7 @@ module.exports = {
         }
         
         // Wait a bit after scrolling
+        // await sleep(1000);
         await page.waitForTimeout(1000);
         
         console.log('[bcgame] Bootstrap complete');
@@ -260,10 +250,12 @@ module.exports = {
                     }
                     
                     // Wait 5 seconds before next scrape
+                    // await sleep(5000);
                     await page.waitForTimeout(5000);
                     
                 } catch (error) {
                     console.error(`[bcgame] Error scraping activity feed usernames: ${error.message}`);
+                    // await sleep(5000);
                     await page.waitForTimeout(5000);
                 }
             }
@@ -284,6 +276,7 @@ module.exports = {
         while (!stopSignal.isSet) {
             try {
                 // Wait a bit before first scrape to ensure chat is open
+                // await sleep(2000);
                 await page.waitForTimeout(2000);
 
                 const liveChatUsernames = await page.evaluate(() => {
@@ -351,10 +344,12 @@ module.exports = {
                 }
 
                 // Wait 10 seconds before next scrape
+                // await sleep(10000);
                 await page.waitForTimeout(10000);
 
             } catch (error) {
                 console.error(`[bcgame] Error scraping live chat usernames: ${error.message}`);
+                // await sleep(10000);
                 await page.waitForTimeout(10000);
             }
         }
