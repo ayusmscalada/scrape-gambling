@@ -63,10 +63,10 @@ module.exports = {
                 
                 // Log usernames from table to console
                 if (tableUsernames.length > 0) {
-                    // console.log(`[winna] Found ${tableUsernames.length} usernames from table:`);
-                    // tableUsernames.forEach(item => {
-                    //     console.log(`  [${item.index}] ${item.username}`);
-                    // });
+                    console.log(`[winna] Found ${tableUsernames.length} usernames from table:`);
+                    tableUsernames.forEach(item => {
+                        console.log(`  [${item.index}] ${item.username}`);
+                    });
                 } else {
                     console.log('[winna] No usernames found in table');
                 }
@@ -111,10 +111,10 @@ module.exports = {
                 
                 // Log usernames from divs to console
                 if (divUsernames.length > 0) {
-                    // console.log(`[winna] Found ${divUsernames.length} usernames from divs:`);
-                    // divUsernames.forEach(item => {
-                    //     console.log(`  [${item.index}] ${item.username}`);
-                    // });
+                    console.log(`[winna] Found ${divUsernames.length} usernames from divs:`);
+                    divUsernames.forEach(item => {
+                        console.log(`  [${item.index}] ${item.username}`);
+                    });
                 } else {
                     console.log('[winna] No usernames found in divs');
                 }
