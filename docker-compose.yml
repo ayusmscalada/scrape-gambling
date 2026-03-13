@@ -50,6 +50,9 @@ services:
   puppeteer-service:
     build: ./node_workers
     container_name: enrichment_puppeteer
+    depends_on:
+      postgres:
+        condition: service_healthy
     # Run as same user as X11 socket owner for display access
     user: "${UID:-1000}:${GID:-1000}"
     environment:
@@ -60,6 +63,14 @@ services:
       # Puppeteer browser cache directory (accessible to user 1000)
       PUPPETEER_CACHE_DIR: /app/.puppeteer-cache
       PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "false"
+      # PostgreSQL connection for username sync
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-enrichment_db}
+      POSTGRES_USER: ${POSTGRES_USER:-enrichment_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-enrichment_pass}
+      # PostgreSQL sync interval (milliseconds)
+      POSTGRES_SYNC_INTERVAL_MS: ${POSTGRES_SYNC_INTERVAL_MS:-30000}
     volumes:
       - ./profiles:/app/profiles
       # Mount X11 socket for display forwarding

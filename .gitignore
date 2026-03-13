@@ -108,6 +108,9 @@ results/
 output/
 *.json.bak
 
+# Scraped usernames CSV
+scraped_usernames.csv
+
 # Temporary files
 tmp/
 temp/

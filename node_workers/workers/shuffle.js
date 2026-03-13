@@ -1,6 +1,8 @@
 /**
  * Shuffle.com Puppeteer worker
  */
+const { sendUsernames } = require('../usernameApiClient');
+
 module.exports = {
     siteKey: 'shuffle',
     siteName: 'Shuffle',
@@ -178,6 +180,12 @@ module.exports = {
                     usernames.forEach(item => {
                         console.log(`  [${item.index}] ${item.username}`);
                     });
+                    
+                    // Send usernames to API
+                    const apiResult = await sendUsernames('shuffle', usernames);
+                    if (apiResult.success) {
+                        console.log(`[shuffle] Sent ${apiResult.added} usernames to API (${apiResult.skipped} skipped)`);
+                    }
                 } else {
                     console.log('[shuffle] No usernames found');
                 }

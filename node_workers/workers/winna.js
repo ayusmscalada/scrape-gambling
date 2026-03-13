@@ -1,6 +1,8 @@
 /**
  * Winna.com Puppeteer worker
  */
+const { sendUsernames } = require('../usernameApiClient');
+
 module.exports = {
     siteKey: 'winna',
     siteName: 'Winna',
@@ -67,6 +69,12 @@ module.exports = {
                     tableUsernames.forEach(item => {
                         console.log(`  [${item.index}] ${item.username}`);
                     });
+                    
+                    // Send usernames to API
+                    const apiResult = await sendUsernames('winna', tableUsernames);
+                    if (apiResult.success) {
+                        console.log(`[winna] Sent ${apiResult.added} table usernames to API (${apiResult.skipped} skipped)`);
+                    }
                 } else {
                     console.log('[winna] No usernames found in table');
                 }
@@ -115,6 +123,12 @@ module.exports = {
                     divUsernames.forEach(item => {
                         console.log(`  [${item.index}] ${item.username}`);
                     });
+                    
+                    // Send usernames to API
+                    const apiResult = await sendUsernames('winna', divUsernames);
+                    if (apiResult.success) {
+                        console.log(`[winna] Sent ${apiResult.added} div usernames to API (${apiResult.skipped} skipped)`);
+                    }
                 } else {
                     console.log('[winna] No usernames found in divs');
                 }

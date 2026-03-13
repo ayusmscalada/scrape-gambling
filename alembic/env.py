@@ -10,7 +10,7 @@ from alembic import context
 # Import app config and models
 from app.config import settings
 from app.db.base import Base
-from app.db.models import RawPlayer, IdentityMatch, QualifiedLead  # Import all models
+from app.db.models import RawPlayer, IdentityMatch  # Import all models
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
