@@ -71,6 +71,14 @@ class PuppeteerClient:
             )
             response.raise_for_status()
             return response.json()
+        except httpx.HTTPStatusError as e:
+            try:
+                body = e.response.json()
+                api_error = body.get("error", body)
+            except Exception:
+                api_error = e.response.text or str(e)
+            log.error(f"Failed to start worker {site_key}: {api_error}")
+            return {"success": False, "error": str(api_error)}
         except httpx.HTTPError as e:
             log.error(f"Failed to start worker {site_key}: {e}")
             return {"success": False, "error": str(e)}

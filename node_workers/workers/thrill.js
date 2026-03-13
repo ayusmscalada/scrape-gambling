@@ -1,3 +1,5 @@
+const { sleep } = require('../utils');
+
 /**
  * Thrill.global Puppeteer worker
  */
@@ -6,11 +8,11 @@ module.exports = {
     siteName: 'Thrill',
     siteUrl: 'https://www.thrill.global/en/casino/',
     async bootstrap(page) {
-        await page.waitForTimeout(1000);
+        await sleep(1000);
     },
     async run(page, stopSignal) {
         while (!stopSignal.isSet) {
-            await page.waitForTimeout(5000);
+            await sleep(5000);
         }
     },
 };

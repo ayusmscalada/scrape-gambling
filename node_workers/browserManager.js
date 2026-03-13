@@ -1,11 +1,13 @@
 /**
  * Browser Manager for Puppeteer workers
- * Manages browser instances for each gambling platform site
+ * Manages browser instances for each gambling platform site.
+ * Loads site-specific worker modules from ./workers/<siteKey>.js and runs bootstrap + run loop.
  */
 
 const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
+const BaseWorker = require('./workers/base');
 
 class BrowserManager {
     constructor() {
@@ -78,25 +80,44 @@ class BrowserManager {
         }
 
         try {
-            // Set up profile directory
-            const profileDir = config.profile_dir || path.join(this.profilesBaseDir, siteKey);
-            if (!fs.existsSync(profileDir)) {
+            // Set up profile directory (resolve relative paths to /app/profiles in container)
+            let profileDir = config.profile_dir || path.join(this.profilesBaseDir, siteKey);
+            if (!path.isAbsolute(profileDir)) {
+                profileDir = path.join(this.profilesBaseDir, path.basename(profileDir));
+            }
+            if (profileDir.indexOf(this.profilesBaseDir) !== 0) {
+                profileDir = path.join(this.profilesBaseDir, siteKey);
+            }
+            const ensureProfileDir = (dir) => {
+                if (fs.existsSync(dir)) {
+                    try {
+                        fs.accessSync(dir, fs.constants.W_OK);
+                        return true;
+                    } catch (e) {
+                        return false;
+                    }
+                }
                 try {
-                    fs.mkdirSync(profileDir, { recursive: true });
+                    fs.mkdirSync(dir, { recursive: true });
+                    fs.accessSync(dir, fs.constants.W_OK);
+                    return true;
                 } catch (e) {
-                    throw new Error(`Failed to create profile directory ${profileDir}: ${e.message}`);
+                    return false;
+                }
+            };
+            if (!ensureProfileDir(profileDir)) {
+                const fallbackDir = path.join('/tmp', 'profiles', siteKey);
+                console.warn(`[${siteKey}] Cannot write to ${profileDir} (permission denied). Using ${fallbackDir}. Fix host: chown -R ${process.env.UID || '1000'}:${process.env.GID || '1000'} ./profiles`);
+                try {
+                    fs.mkdirSync(fallbackDir, { recursive: true });
+                    profileDir = fallbackDir;
+                } catch (e) {
+                    throw new Error(`Failed to create profile directory ${profileDir}: ${e.message}. Fix: run 'chown -R ${process.env.UID || '1000'}:${process.env.GID || '1000'} ./profiles' on host`);
                 }
             }
-            // Ensure directory is writable
-            try {
-                fs.accessSync(profileDir, fs.constants.W_OK);
-            } catch (e) {
-                throw new Error(`Profile directory ${profileDir} is not writable: ${e.message}`);
-            }
 
-            // Launch browser with persistent context
-            const browser = await puppeteer.launch({
-                headless: config.headless !== false, // Default to headless if not specified
+            const launchOptions = {
+                headless: config.headless !== false,
                 userDataDir: profileDir,
                 args: [
                     '--disable-blink-features=AutomationControlled',
@@ -109,7 +130,21 @@ class BrowserManager {
                     width: config.viewport_width || 1440,
                     height: config.viewport_height || 900,
                 },
-            });
+            };
+
+            // Launch browser; if headed mode fails (e.g. no DISPLAY in Docker), retry headless
+            let browser;
+            try {
+                browser = await puppeteer.launch(launchOptions);
+            } catch (launchErr) {
+                const msg = (launchErr && launchErr.message) ? launchErr.message : String(launchErr);
+                if (launchOptions.headless === false && (msg.includes('Failed to launch') || msg.includes('could not find Chrome') || msg.includes('DISPLAY'))) {
+                    console.warn(`[${siteKey}] Headed launch failed (${msg.slice(0, 80)}...), retrying headless`);
+                    browser = await puppeteer.launch({ ...launchOptions, headless: true });
+                } else {
+                    throw launchErr;
+                }
+            }
 
             // Create or get page
             const pages = await browser.pages();
@@ -123,7 +158,24 @@ class BrowserManager {
                 });
             }
 
-            // Store worker info
+            // Load site-specific worker (bootstrap + run loop)
+            let workerModule;
+            try {
+                workerModule = require(path.join(__dirname, 'workers', siteKey + '.js'));
+            } catch (e) {
+                console.warn(`No worker for ${siteKey}, using BaseWorker: ${e.message}`);
+                workerModule = new BaseWorker(siteKey, config);
+            }
+
+            const stopSignal = { isSet: false };
+            if (typeof workerModule.bootstrap === 'function') {
+                await workerModule.bootstrap(page);
+            }
+            const runPromise = typeof workerModule.run === 'function'
+                ? workerModule.run(page, stopSignal)
+                : Promise.resolve();
+
+            // Store worker info (including stopSignal and runPromise for graceful stop)
             this.browsers.set(siteKey, {
                 browser,
                 page,
@@ -133,6 +185,8 @@ class BrowserManager {
                     userDataDir: profileDir,
                 },
                 startedAt: new Date(),
+                stopSignal,
+                runPromise,
             });
 
             return {
@@ -165,6 +219,17 @@ class BrowserManager {
 
         try {
             worker.state = 'stopping';
+
+            // Signal run loop to exit, then give it a short time to finish
+            if (worker.stopSignal) {
+                worker.stopSignal.isSet = true;
+            }
+            if (worker.runPromise) {
+                await Promise.race([
+                    worker.runPromise,
+                    new Promise(resolve => setTimeout(resolve, 2000)),
+                ]).catch(() => {});
+            }
 
             // Close browser
             if (worker.browser) {

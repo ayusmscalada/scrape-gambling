@@ -1,8 +1,9 @@
+const { sleep } = require('../utils');
+
 /**
  * Base worker class for site-specific automation
  * Site workers can extend this for custom behavior
  */
-
 class BaseWorker {
     constructor(siteKey, config) {
         this.siteKey = siteKey;
@@ -15,17 +16,18 @@ class BaseWorker {
      */
     async bootstrap(page) {
         // Default: wait a bit for page to settle
-        await page.waitForTimeout(1000);
+        await sleep(1000);
     }
 
     /**
      * Main worker loop
      * Override in site workers
+     * stopSignal: { isSet: boolean } — set to true to stop the loop
      */
     async run(page, stopSignal) {
         // Default: keep page alive
-        while (!stopSignal.stop) {
-            await page.waitForTimeout(5000);
+        while (!stopSignal.isSet) {
+            await sleep(5000);
         }
     }
 }

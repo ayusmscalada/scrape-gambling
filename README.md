@@ -131,6 +131,8 @@ POSTGRES_HOST=postgres
 POSTGRES_PORT=5433  # Default is 5433 to avoid conflicts with local PostgreSQL
 ADMINER_PORT=8080   # Port for Adminer web UI (default: 8080)
 LOG_LEVEL=INFO
+# Optional: 2captcha API key for Puppeteer workers (solves Cloudflare "Verify you are human" on Stake, etc.)
+TWO_CAPTCHA_API_KEY=your_2captcha_key
 ```
 
 **Note:** The Docker container maps to port **5433** on your host by default (to avoid conflicts with local PostgreSQL). The container's internal port is still 5432. If you want to use port 5432, set `POSTGRES_PORT=5432` in your `.env` file and ensure no local PostgreSQL is running.
@@ -177,6 +179,16 @@ python scan_socials.py antonyambriz --source-site Stake
 ```
 
 ## Troubleshooting
+
+### Puppeteer: "EACCES: permission denied" on `/app/profiles`
+
+If starting a worker (e.g. `start stake`) fails with permission denied on the profiles directory, fix ownership of the host `./profiles` folder so the container user can write:
+
+```bash
+./fix_profiles_permissions.sh
+```
+
+Then restart the puppeteer-service or try `start stake` again. The script creates `./profiles` if needed and sets ownership to your user (same UID/GID the container uses).
 
 ### Port 5432 already in use
 

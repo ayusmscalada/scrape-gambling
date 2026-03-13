@@ -4,11 +4,43 @@ Console and JSON output formatting.
 
 import json
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from app.enrich.schemas import EnrichmentResult, CandidateMatch
 
 log = logging.getLogger(__name__)
+
+# Platform name -> SocialEnricher key (telegram, instagram, twitter, youtube)
+PLATFORM_TO_SOCIAL_KEY = {
+    "telegram": "telegram",
+    "instagram": "instagram",
+    "x": "twitter",
+    "twitter": "twitter",
+    "youtube": "youtube",
+}
+
+
+def result_to_socials_dict(result: EnrichmentResult) -> Dict[str, Optional[str]]:
+    """
+    Build the flat dict expected by SocialEnricher (main.py): telegram, instagram, twitter, youtube.
+    Uses best_match first, then fills from other candidates by platform.
+    """
+    out = {"telegram": None, "instagram": None, "twitter": None, "youtube": None}
+    candidates = []
+    if result.best_match:
+        candidates.append(result.best_match)
+    for c in result.candidates:
+        if c is not result.best_match:
+            candidates.append(c)
+    for c in candidates:
+        key = PLATFORM_TO_SOCIAL_KEY.get((c.platform or "").lower())
+        if not key or out.get(key):
+            continue
+        # Prefer public contact value (handle/url) for that platform, else social_url
+        value = c.public_contact_value if c.public_contact_type == key else c.social_url
+        if value:
+            out[key] = value
+    return out
 
 
 def render_console_report(result: EnrichmentResult) -> None:

@@ -2,8 +2,9 @@ FROM node:18-slim
 
 WORKDIR /app
 
-# Install system dependencies for Puppeteer/Chromium
-RUN apt-get update && apt-get install -y \
+# Install system dependencies and Chromium (so any user can run it; Puppeteer's download is root-only)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
     gcc \
     wget \
     libnss3 \
@@ -28,17 +29,19 @@ RUN apt-get update && apt-get install -y \
     libxcb1 \
     libxext6 \
     libxss1 \
-    # X11 client libraries and utilities
     xauth \
     x11-utils \
     x11-xserver-utils \
     && rm -rf /var/lib/apt/lists/*
 
+# Use system Chromium (container runs as non-root; Puppeteer's cache would be root-only)
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
 # Copy package files
 COPY package*.json ./
 
-# Install Node dependencies (this will also install Chromium via Puppeteer)
-# Note: Installing as root, then we'll change ownership
+# Install Node dependencies (no browser download)
 RUN npm install
 
 # Copy application code

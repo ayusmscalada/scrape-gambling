@@ -10,6 +10,7 @@ Example:
 """
 
 import argparse
+import json
 import logging
 import sys
 import time
@@ -21,7 +22,7 @@ from app.enrich.search import discover_candidates
 from app.enrich.extract import extract_candidate_evidence
 from app.enrich.score import score_candidate
 from app.enrich.classify import classify_candidate, classify_lead
-from app.enrich.output import render_console_report, save_json_report
+from app.enrich.output import render_console_report, save_json_report, result_to_socials_dict
 from app.db.session import db_session
 from app.db.repositories import EnrichmentRepository
 from app.config import settings
@@ -199,11 +200,24 @@ Examples:
         action="store_true",
         help="Enable verbose logging"
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_stdout",
+        help="Print only a JSON object to stdout (telegram, instagram, twitter, youtube) for use by main.py enricher"
+    )
     
     args = parser.parse_args()
     
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+    
+    # When --json, logs must go to stderr so stdout is only JSON for SocialEnricher
+    if args.json_stdout:
+        root = logging.getLogger()
+        for h in root.handlers[:]:
+            root.removeHandler(h)
+        root.addHandler(logging.StreamHandler(sys.stderr))
     
     # Wait for database if requested
     if args.wait_db:
@@ -234,8 +248,12 @@ Examples:
         if args.json_out:
             save_json_report(result, args.json_out)
         
-        # Render console report
-        render_console_report(result)
+        # Machine-readable JSON to stdout (for main.py SocialEnricher)
+        if args.json_stdout:
+            print(json.dumps(result_to_socials_dict(result), ensure_ascii=False))
+        else:
+            # Render console report
+            render_console_report(result)
         
         # Exit code based on classification
         if result.final_classification == "no lead":

@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 # Platform keywords to look for
 GAMBLING_PLATFORMS = [
     "stake", "roobet", "rollbit", "duelbits", "bcgame", "metawin", "razed",
-    "shguffle", "winna", "gamgom", "thrill", "packdraw",
+    "shuffle", "winna", "gamdom", "thrill", "packdraw",
     "gambling", "casino", "betting", "crypto casino", "crypto gambling"
 ]
 

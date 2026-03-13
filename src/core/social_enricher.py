@@ -87,7 +87,7 @@ class SocialEnricher:
 
         try:
             proc = subprocess.run(
-                ["python3", str(self.script), username],
+                ["python3", str(self.script), username, "--json"],
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,

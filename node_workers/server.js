@@ -53,6 +53,8 @@ app.post('/start/:site', async (req, res) => {
         const result = await browserManager.start(site, config);
         res.json(result);
     } catch (error) {
+        console.error(`[start/${req.params.site}] Error:`, error.message);
+        console.error(error.stack);
         res.status(500).json({
             success: false,
             site: req.params.site,

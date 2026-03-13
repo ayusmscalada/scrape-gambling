@@ -33,6 +33,17 @@ POST /restart/:site      # Restart worker (body: config JSON)
 POST /stop-all           # Stop all workers
 ```
 
+## Cloudflare "Verify you are human" (Stake, etc.)
+
+If a site shows Cloudflare’s Turnstile challenge, the Stake worker can solve it via [2captcha](https://2captcha.com/).
+
+1. Get a 2captcha API key and add it to your environment:
+   - **Docker:** In `.env` set `TWO_CAPTCHA_API_KEY=your_key` (puppeteer-service reads it).
+   - **Local Node:** `export TWO_CAPTCHA_API_KEY=your_key` before starting the service.
+2. Start the Stake worker as usual; if the challenge appears, the worker will request a token from 2captcha and inject it. Solving takes ~15–30 seconds and uses 2captcha balance.
+
+If `TWO_CAPTCHA_API_KEY` is not set, the challenge is not solved and the worker continues without it.
+
 ## Configuration
 
 Workers are configured via the request body when starting:
@@ -89,7 +100,7 @@ module.exports = {
         // Main scraping loop
         while (!stopSignal.isSet) {
             // Collect data, monitor feeds, etc.
-            await page.waitForTimeout(5000);
+            await require('../utils').sleep(5000);
         }
     },
 };

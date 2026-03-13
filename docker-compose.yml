@@ -57,6 +57,8 @@ services:
       DISPLAY: ${DISPLAY:-:0}
       NODE_ENV: production
       PORT: 3000
+      # Optional: 2captcha API key to solve Cloudflare "Verify you are human" on Stake etc.
+      TWO_CAPTCHA_API_KEY: ef4a298cb3a66e0cbfc74a1ebbfa8eed
     volumes:
       - ./profiles:/app/profiles
       # Mount X11 socket for display forwarding

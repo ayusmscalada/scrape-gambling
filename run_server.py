@@ -25,7 +25,7 @@ import signal
 import sys
 import threading
 from pathlib import Path
-from queue import Queue
+from queue import Queue, Empty
 
 import yaml
 
@@ -68,8 +68,13 @@ async def run_console_server():
     # Initialize registry and manager
     registry = SiteRegistry()
     
-    # Get Puppeteer service URL from environment
-    puppeteer_url = os.environ.get('PUPPETEER_SERVICE_URL', 'http://puppeteer-service:3000')
+    # Puppeteer URL: use env if set; in Docker use service name, on host use localhost
+    if os.environ.get('PUPPETEER_SERVICE_URL'):
+        puppeteer_url = os.environ.get('PUPPETEER_SERVICE_URL')
+    elif os.path.exists('/.dockerenv'):
+        puppeteer_url = 'http://puppeteer-service:3000'
+    else:
+        puppeteer_url = 'http://localhost:3000'
     log.info(f"Connecting to Puppeteer service at: {puppeteer_url}")
     
     manager = AutomationManager(registry, site_configs, puppeteer_url=puppeteer_url)
@@ -90,7 +95,8 @@ async def run_console_server():
     shutdown_event = asyncio.Event()
     
     def signal_handler(sig, frame):
-        log.info("\nReceived shutdown signal")
+        if not shutdown_event.is_set():
+            log.info("\nReceived shutdown signal")
         shutdown_event.set()
     
     signal.signal(signal.SIGINT, signal_handler)
@@ -128,17 +134,17 @@ async def run_console_server():
     try:
         while not shutdown_event.is_set():
             try:
-                # Wait for command with timeout
+                # Wait for command with timeout (so we can check shutdown_event)
                 try:
                     command = command_queue.get(timeout=0.5)
-                except:
-                    # Timeout - check shutdown
+                except Empty:
                     if shutdown_event.is_set():
                         break
                     continue
+                except KeyboardInterrupt:
+                    break
                 
                 if command is None:
-                    # EOF/Ctrl+C
                     break
                 
                 if command.strip():
@@ -149,6 +155,8 @@ async def run_console_server():
                     if should_exit:
                         break
                         
+            except KeyboardInterrupt:
+                break
             except Exception as e:
                 log.error(f"Error processing command: {e}", exc_info=True)
     
