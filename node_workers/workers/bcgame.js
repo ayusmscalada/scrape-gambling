@@ -1,5 +1,3 @@
-// const { sleep } = require('../utils');
-
 /**
  * BC.Game Puppeteer worker
  */
@@ -9,10 +7,9 @@ module.exports = {
     siteUrl: 'https://bc.game',
     async bootstrap(page) {
         console.log('[bcgame] Bootstrapping BC.Game page...');
-        // await sleep(2000);
         await page.waitForTimeout(2000);
 
-        // Click the live chat button: button containing div.color_icon_img.chat (same pattern as roobet)
+        // 1) Click the live chat button first
         console.log('[bcgame] Looking for live chat button...');
         const maxRetries = 10;
         const retryDelay = 2000;
@@ -35,14 +32,12 @@ module.exports = {
                 if (clicked) {
                     console.log(`[bcgame] Clicked live chat button (attempt ${attempt})`);
                     chatButtonClicked = true;
-                    // await sleep(1500);
                     await page.waitForTimeout(1500);
                     break;
                 }
 
                 if (attempt < maxRetries) {
                     console.log(`[bcgame] Live chat button not found, retrying in ${retryDelay / 1000}s... (${attempt}/${maxRetries})`);
-                    // await sleep(retryDelay);
                     await page.waitForTimeout(retryDelay);
                 }
             } catch (error) {
@@ -54,8 +49,103 @@ module.exports = {
         if (!chatButtonClicked) {
             console.warn(`[bcgame] Could not find or click the live chat button after ${maxRetries} attempts. Continuing anyway...`);
         }
-        
-        // First scroll to the end of the page, wait 5 seconds, then scroll back up to "All Bingo Games" section
+
+        // 2) After live chat is open, scroll down until the bets table is found, then center it
+        // BC.Game main content often scrolls inside a div, not the window - find and scroll that container
+        console.log('[bcgame] Scrolling down to find bets table...');
+        const tableSelector = 'table.table tbody a[href^="/user/profile/"]';
+        const maxScrollAttempts = 120;
+        const scrollStep = 800;
+        let tableFound = false;
+
+        // Move mouse to main content area (center-left) so wheel events don't hit the chat panel
+        await page.evaluate(() => {
+            const main = document.querySelector('main') || document.querySelector('[class*="content"]') || document.body;
+            const rect = main.getBoundingClientRect();
+            const x = rect.left + Math.min(400, rect.width / 3);
+            const y = rect.top + rect.height / 2;
+            window.__bcgameScrollCenter = { x, y };
+        });
+        const center = await page.evaluate(() => window.__bcgameScrollCenter || { x: 400, y: 400 });
+        await page.mouse.move(center.x, center.y);
+        await page.waitForTimeout(300);
+
+        for (let attempt = 0; attempt < maxScrollAttempts; attempt++) {
+            const result = await page.evaluate((sel) => {
+                const link = document.querySelector(sel);
+                if (link) {
+                    const table = link.closest('table');
+                    if (table) {
+                        table.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
+                        return { found: true };
+                    }
+                }
+                // Find main scrollable container (SPA often uses a div with overflow-y)
+                const candidates = document.querySelectorAll('div[class*="overflow"], main, [class*="scroll"]');
+                let best = null;
+                let bestScrollHeight = 0;
+                for (const el of candidates) {
+                    const sh = el.scrollHeight;
+                    const ch = el.clientHeight;
+                    const style = window.getComputedStyle(el);
+                    const overflowY = style.overflowY || style.overflow;
+                    if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && sh > ch + 200) {
+                        if (sh > bestScrollHeight) {
+                            bestScrollHeight = sh;
+                            best = el;
+                        }
+                    }
+                }
+                if (best) {
+                    best.scrollTop += 800;
+                    return { found: false, scrolled: true };
+                }
+                // Fallback: scroll window and use wheel target
+                window.scrollBy(0, 800);
+                return { found: false, scrolled: true };
+            }, tableSelector);
+
+            if (result.found) {
+                tableFound = true;
+                console.log(`[bcgame] Bets table found (attempt ${attempt + 1}), centering on screen...`);
+                await page.waitForTimeout(400);
+                await page.evaluate((sel) => {
+                    const link = document.querySelector(sel);
+                    if (!link) return;
+                    const table = link.closest('table');
+                    if (!table) return;
+                    const rect = table.getBoundingClientRect();
+                    const vh = window.innerHeight;
+                    const tableCenterY = rect.top + rect.height / 2;
+                    const viewportCenterY = vh / 2;
+                    const scrollY = window.pageYOffset + tableCenterY - viewportCenterY;
+                    window.scrollTo({ top: Math.max(0, scrollY), left: 0, behavior: 'instant' });
+                    // If page uses inner scroll container, center using that
+                    const candidates = document.querySelectorAll('div[class*="overflow"], main, [class*="scroll"]');
+                    for (const el of candidates) {
+                        const style = window.getComputedStyle(el);
+                        const oy = style.overflowY || style.overflow;
+                        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) {
+                            const rect2 = table.getBoundingClientRect();
+                            const elRect = el.getBoundingClientRect();
+                            const targetScroll = el.scrollTop + (rect2.top - elRect.top) - el.clientHeight / 2 + rect2.height / 2;
+                            el.scrollTop = Math.max(0, Math.min(targetScroll, el.scrollHeight - el.clientHeight));
+                            break;
+                        }
+                    }
+                }, tableSelector);
+                break;
+            }
+            // Also fire wheel so any listener gets it; container scroll is done in evaluate above
+            await page.mouse.wheel({ deltaY: scrollStep });
+            await page.waitForTimeout(280);
+        }
+        if (!tableFound) {
+            console.warn('[bcgame] Bets table not found after scrolling. Continuing...');
+        }
+        await page.waitForTimeout(1000);
+
+        // 3) Scroll to end of page, then scroll back up to "All Bingo Games" section
         console.log('[bcgame] Scrolling to end of page first...');
         try {
             // Scroll down to the end using mouse wheel events
@@ -65,16 +155,15 @@ module.exports = {
             });
             
             let scrollAttempts = 0;
-            const maxScrollAttempts = 100; // Prevent infinite loop
+            const maxScrollToEndAttempts = 100; // Prevent infinite loop
             let noChangeCount = 0;
             const noChangeThreshold = 5; // How many times scroll position can remain unchanged before stopping
             
-            while (scrollAttempts < maxScrollAttempts) {
+            while (scrollAttempts < maxScrollToEndAttempts) {
                 previousScrollTop = currentScrollTop;
                 
                 // Simulate mouse wheel scroll down
                 await page.mouse.wheel({ deltaY: 1000 });
-                // await sleep(300); // Wait for content to load
                 await page.waitForTimeout(300);
                 
                 // Check new scroll position
@@ -99,13 +188,11 @@ module.exports = {
             // Perform a few extra scrolls to ensure we're at the very bottom
             for (let i = 0; i < 5; i++) {
                 await page.mouse.wheel({ deltaY: 500 });
-                // await sleep(200);
                 await page.waitForTimeout(200);
             }
             
             // Wait 5 seconds after scrolling to end
             console.log('[bcgame] Waiting 5 seconds after reaching end of page...');
-            // await sleep(5000);
             await page.waitForTimeout(5000);
             
             // Now scroll back up to "All Bingo Games" section
@@ -162,13 +249,11 @@ module.exports = {
                 }, targetElementInfo.scrollY);
                 
                 // Wait for scroll to complete
-                // await sleep(1000);
-                await page.waitForTimeout(1000);
+                    await page.waitForTimeout(1000);
                 
                 // Move mouse to center of the div and use mouse wheel for fine adjustment
                 await page.mouse.move(targetElementInfo.x, targetElementInfo.y);
-                // await sleep(500);
-                await page.waitForTimeout(500);
+                    await page.waitForTimeout(500);
                 
                 console.log('[bcgame] Scrolled up to "All Bingo Games" section');
             } else {
@@ -179,7 +264,6 @@ module.exports = {
         }
         
         // Wait a bit after scrolling
-        // await sleep(1000);
         await page.waitForTimeout(1000);
         
         console.log('[bcgame] Bootstrap complete');
@@ -250,12 +334,10 @@ module.exports = {
                     }
                     
                     // Wait 5 seconds before next scrape
-                    // await sleep(5000);
                     await page.waitForTimeout(5000);
                     
                 } catch (error) {
                     console.error(`[bcgame] Error scraping activity feed usernames: ${error.message}`);
-                    // await sleep(5000);
                     await page.waitForTimeout(5000);
                 }
             }
@@ -276,7 +358,6 @@ module.exports = {
         while (!stopSignal.isSet) {
             try {
                 // Wait a bit before first scrape to ensure chat is open
-                // await sleep(2000);
                 await page.waitForTimeout(2000);
 
                 const liveChatUsernames = await page.evaluate(() => {
@@ -344,13 +425,11 @@ module.exports = {
                 }
 
                 // Wait 10 seconds before next scrape
-                // await sleep(10000);
-                await page.waitForTimeout(10000);
+                    await page.waitForTimeout(10000);
 
             } catch (error) {
                 console.error(`[bcgame] Error scraping live chat usernames: ${error.message}`);
-                // await sleep(10000);
-                await page.waitForTimeout(10000);
+                    await page.waitForTimeout(10000);
             }
         }
         console.log('[bcgame] Live chat scraper stopped');
