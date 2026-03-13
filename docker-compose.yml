@@ -1,0 +1,98 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: enrichment_postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-enrichment_db}
+      POSTGRES_USER: ${POSTGRES_USER:-enrichment_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-enrichment_pass}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"  # Default to 5433 to avoid conflicts with local PostgreSQL
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-enrichment_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - enrichment_network
+
+  app:
+    build: .
+    container_name: enrichment_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      puppeteer-service:
+        condition: service_healthy
+    # Run as the same user as X11 socket owner to access display
+    # X11 sockets are owned by user 1000 (peters), so container must run as same user
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-enrichment_db}
+      POSTGRES_USER: ${POSTGRES_USER:-enrichment_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-enrichment_pass}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      DATABASE_URL: postgresql://${POSTGRES_USER:-enrichment_user}:${POSTGRES_PASSWORD:-enrichment_pass}@postgres:5432/${POSTGRES_DB:-enrichment_db}
+    volumes:
+      - .:/app
+    networks:
+      - enrichment_network
+    command: tail -f /dev/null  # Keep container running
+    stdin_open: true
+    tty: true
+    # Allow X11 access (requires xhost +local:docker or xhost +SI:localuser:${UID} on host)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  puppeteer-service:
+    build: ./node_workers
+    container_name: enrichment_puppeteer
+    # Run as same user as X11 socket owner for display access
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      # X11 forwarding for visible browser windows
+      DISPLAY: ${DISPLAY:-:0}
+      NODE_ENV: production
+      PORT: 3000
+    volumes:
+      - ./profiles:/app/profiles
+      # Mount X11 socket for display forwarding
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    ports:
+      - "${PUPPETEER_PORT:-3000}:3000"
+    networks:
+      - enrichment_network
+    restart: unless-stopped
+    # Allow X11 access
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+  adminer:
+    image: adminer:latest
+    container_name: enrichment_adminer
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - enrichment_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  enrichment_network:
+    driver: bridge

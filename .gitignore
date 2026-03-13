@@ -1,0 +1,161 @@
+# ── Python ───────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# ── Node.js ─────────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.npm
+.node_repl_history
+*.tgz
+
+# ── Browser Profiles & Data ────────────────────────────────────────────────────
+# Browser profiles contain cookies, local storage, session data
+profiles/
+*.profile/
+.chrome/
+.firefox/
+.playwright-browsers/
+.playwright/
+.puppeteer_cache/
+
+# ── Docker ──────────────────────────────────────────────────────────────────────
+.docker/
+docker-compose.override.yml
+*.dockerignore
+
+# ── Database ────────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+enrichment.db
+postgres_data/
+*.dump
+
+# ── Environment Variables ───────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+*.env
+
+# ── Logs ────────────────────────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*
+log/
+
+# ── IDE & Editors ───────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# ── OS Files ────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ── Project Specific ───────────────────────────────────────────────────────────
+# Result files from enrichment
+result.json
+results/
+output/
+*.json.bak
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Test outputs
+.pytest_cache/
+.tox/
+.cache
+test-results/
+coverage/
+
+# Migration backups
+alembic/versions/*.py.bak
+
+# Script outputs
+*.out
+*.err
+
+# ── Build Artifacts ─────────────────────────────────────────────────────────────
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+
+# ── Jupyter Notebooks ──────────────────────────────────────────────────────────
+.ipynb_checkpoints
+*.ipynb
+
+# ── MyPy ────────────────────────────────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ── Pyre ────────────────────────────────────────────────────────────────────────
+.pyre/
+
+# ── Local Configuration ─────────────────────────────────────────────────────────
+local_config.yaml
+local_settings.py
+config.local.yaml
+
+# ── Backup Files ────────────────────────────────────────────────────────────────
+*.backup
+*.old
+*~

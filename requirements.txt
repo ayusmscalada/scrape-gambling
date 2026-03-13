@@ -1,0 +1,31 @@
+# ── Cloudflare-bypass HTTP (impersonates Chrome TLS fingerprint) ──────────────
+curl_cffi==0.7.4
+
+# ── async HTTP (used internally by curl_cffi async) ───────────────────────────
+aiohttp==3.9.5
+
+# ── WebSocket client (graphql-transport-ws — used by Stake) ──────────────────
+websockets==12.0
+
+# ── Socket.IO async client (used by Rollbit) ─────────────────────────────────
+python-socketio[asyncio_client]==5.11.3
+python-engineio==4.9.1
+
+# ── sync HTTP (scan_socials.py) ───────────────────────────────────────────────
+requests==2.32.3
+
+# ── utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+
+# ── Database (PostgreSQL) ────────────────────────────────────────────────────
+sqlalchemy==2.0.23
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+pydantic-settings==2.1.0
+pydantic==2.5.3
+pyyaml==6.0.1
+
+# ── HTTP client for Puppeteer service ─────────────────────────────────────────
+httpx==0.25.2

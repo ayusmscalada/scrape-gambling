@@ -1,0 +1,216 @@
+# Site configuration for automation workers
+# Each site can be enabled/disabled and configured independently
+# 
+# Note: For local development, headless: false shows visible browser windows
+# In Docker without GUI forwarding, visible windows won't appear
+
+sites:
+  shuffle:
+    key: shuffle
+    name: Shuffle
+    url: https://shuffle.com
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/shuffle
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  winna:
+    key: winna
+    name: Winna
+    url: https://winna.com
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/winna
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  gamdom:
+    key: gamdom
+    name: Gamdom
+    url: https://gamdom.com
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/gamdom
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  thrill:
+    key: thrill
+    name: Thrill
+    url: https://www.thrill.global/en/casino/
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/thrill
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  roobet:
+    key: roobet
+    name: Roobet
+    url: https://roobet.com
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/roobet
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  stake:
+    key: stake
+    name: Stake
+    url: https://stake.com
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/stake
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  stake_us:
+    key: stake_us
+    name: Stake US
+    url: https://stake.us
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/stake_us
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  rollbit:
+    key: rollbit
+    name: Rollbit
+    url: https://rollbit.com
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/rollbit
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  bcgame:
+    key: bcgame
+    name: BC.Game
+    url: https://bc.game
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/bcgame
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  duelbits:
+    key: duelbits
+    name: Duelbits
+    url: https://duelbits.com/en
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/duelbits
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  packdraw:
+    key: packdraw
+    name: PackDraw
+    url: https://packdraw.com/en-us/
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/packdraw
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  metawin:
+    key: metawin
+    name: MetaWin
+    url: https://metawin.com
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/metawin
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  metawin_us:
+    key: metawin_us
+    name: MetaWin US
+    url: https://metawin.us
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/metawin_us
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
+
+  razed:
+    key: razed
+    name: Razed
+    url: https://www.razed.com
+    enabled: true
+    headless: false
+    channel: chromium
+    profile_dir: ./profiles/razed
+    viewport_width: 1440
+    viewport_height: 900
+    slow_mo: null
+    launch_on_start: false
+    max_retries: 3
+    timeout_seconds: 30
