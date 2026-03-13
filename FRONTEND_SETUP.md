@@ -40,7 +40,7 @@ REACT_APP_WS_URL=http://localhost:5000
 npm start
 ```
 
-The frontend will run on http://localhost:3000
+The frontend will run on http://localhost:3030
 
 ## Backend Setup
 
@@ -87,7 +87,7 @@ The Python backend emits the following WebSocket events:
 
 1. Start the Python backend: `python run_server.py`
 2. Start the React frontend: `cd frontend && npm start`
-3. Open http://localhost:3000 in your browser
+3. Open http://localhost:3030 in your browser
 4. Watch real-time updates as data flows in!
 
 ## Production Build
