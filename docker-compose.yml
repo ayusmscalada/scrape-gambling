@@ -57,6 +57,9 @@ services:
       DISPLAY: ${DISPLAY:-:0}
       NODE_ENV: production
       PORT: 3000
+      # Puppeteer browser cache directory (accessible to user 1000)
+      PUPPETEER_CACHE_DIR: /app/.puppeteer-cache
+      PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "false"
     volumes:
       - ./profiles:/app/profiles
       # Mount X11 socket for display forwarding

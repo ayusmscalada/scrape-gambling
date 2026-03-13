@@ -1,4 +1,4 @@
-FROM node:18-slim
+FROM node:24-slim
 
 WORKDIR /app
 
@@ -34,18 +34,35 @@ RUN apt-get update && apt-get install -y \
     x11-xserver-utils \
     && rm -rf /var/lib/apt/lists/*
 
+# Set Puppeteer cache directory and skip browser download during npm install
+ENV PUPPETEER_CACHE_DIR=/app/.puppeteer-cache
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
 # Copy package files
 COPY package*.json ./
 
-# Install Node dependencies (this will also install Chromium via Puppeteer)
-# Note: Installing as root, then we'll change ownership
+# Install Node dependencies (skip browser download to avoid network issues)
 RUN npm install
+
+# Create cache directory before installing browser
+RUN mkdir -p /app/.puppeteer-cache
+
+# Now install Chromium browser separately with retries
+# Use 'chrome' instead of 'chromium' - Chrome is the pinned browser for Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
+RUN npx puppeteer install chrome || \
+    (echo "Retry 1..." && sleep 10 && npx puppeteer install chrome) || \
+    (echo "Retry 2..." && sleep 20 && npx puppeteer install chrome)
+
+# Make cache directory accessible to all users
+RUN chmod -R 777 /app/.puppeteer-cache 2>/dev/null || true
 
 # Copy application code
 COPY . .
 
 # Create profiles directory (will be mounted as volume, but ensure it exists)
 RUN mkdir -p /app/profiles
+RUN chmod 777 /app/profiles
 
 # Expose API port
 EXPOSE 3000

@@ -7,11 +7,24 @@ const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
 
+// Set Puppeteer cache directory if not already set
+// Use local path when running outside Docker
+if (!process.env.PUPPETEER_CACHE_DIR) {
+    const os = require('os');
+    const isDocker = fs.existsSync('/.dockerenv');
+    process.env.PUPPETEER_CACHE_DIR = isDocker 
+        ? '/app/.puppeteer-cache' 
+        : path.join(os.homedir(), '.cache', 'puppeteer');
+}
+
 class BrowserManager {
     constructor() {
         this.browsers = new Map(); // site_key -> { browser, page, state, config }
-        // Use /app/profiles (inside container) - mounted from ./profiles on host
-        this.profilesBaseDir = '/app/profiles';
+        // Use local profiles directory when running outside Docker
+        const isDocker = fs.existsSync('/.dockerenv');
+        this.profilesBaseDir = isDocker 
+            ? '/app/profiles' 
+            : path.join(__dirname, '..', 'profiles');
         
         // Ensure profiles directory exists
         // Note: Directory is mounted as volume, so it should exist
@@ -95,8 +108,9 @@ class BrowserManager {
             }
 
             // Launch browser with persistent context
-            const browser = await puppeteer.launch({
-                headless: config.headless !== false, // Default to headless if not specified
+            const launchOptions = {
+                headless: false,
+                // headless: config.headless !== false, // Default to headless if not specified
                 userDataDir: profileDir,
                 args: [
                     '--disable-blink-features=AutomationControlled',
@@ -109,18 +123,90 @@ class BrowserManager {
                     width: config.viewport_width || 1440,
                     height: config.viewport_height || 900,
                 },
-            });
+            };
+
+            // Log cache directory and verify browser exists
+            const cacheDir = process.env.PUPPETEER_CACHE_DIR || '/app/.puppeteer-cache';
+            console.log(`[${siteKey}] Launching browser (cache dir: ${cacheDir})`);
+            
+            // Try to get executable path for debugging
+            try {
+                const executablePath = puppeteer.executablePath();
+                console.log(`[${siteKey}] Browser executable: ${executablePath}`);
+                if (!fs.existsSync(executablePath)) {
+                    throw new Error(`Browser executable not found at: ${executablePath}. Run: npx puppeteer browsers install chromium`);
+                }
+            } catch (e) {
+                console.warn(`[${siteKey}] Could not verify browser executable: ${e.message}`);
+            }
+
+            const browser = await puppeteer.launch(launchOptions);
 
             // Create or get page
             const pages = await browser.pages();
             const page = pages.length > 0 ? pages[0] : await browser.newPage();
 
+            // Determine URL to navigate to
+            let targetUrl = config.url;
+            
+            // If no URL in config, try to load from worker module
+            if (!targetUrl) {
+                try {
+                    const workerPath = path.join(__dirname, 'workers', `${siteKey}.js`);
+                    if (fs.existsSync(workerPath)) {
+                        const workerModule = require(workerPath);
+                        if (workerModule.siteUrl) {
+                            targetUrl = workerModule.siteUrl;
+                            console.log(`[${siteKey}] Using URL from worker module: ${targetUrl}`);
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[${siteKey}] Could not load URL from worker module: ${e.message}`);
+                }
+            }
+
             // Navigate to site URL
-            if (config.url) {
-                await page.goto(config.url, {
+            if (targetUrl) {
+                console.log(`[${siteKey}] Navigating to: ${targetUrl}`);
+                await page.goto(targetUrl, {
                     waitUntil: 'domcontentloaded',
                     timeout: (config.timeout_seconds || 30) * 1000,
                 });
+                console.log(`[${siteKey}] Navigation complete`);
+            } else {
+                console.warn(`[${siteKey}] No URL provided and not found in worker module. Browser opened but not navigated.`);
+            }
+
+            // Load and run site-specific worker
+            const stopSignal = { isSet: false };
+            let workerTask = null;
+            
+            try {
+                const workerPath = path.join(__dirname, 'workers', `${siteKey}.js`);
+                if (fs.existsSync(workerPath)) {
+                    const workerModule = require(workerPath);
+                    
+                    // Run bootstrap if available
+                    if (workerModule.bootstrap && typeof workerModule.bootstrap === 'function') {
+                        console.log(`[${siteKey}] Running bootstrap...`);
+                        await workerModule.bootstrap(page);
+                    }
+                    
+                    // Start worker loop in background
+                    if (workerModule.run && typeof workerModule.run === 'function') {
+                        console.log(`[${siteKey}] Starting worker loop...`);
+                        workerTask = workerModule.run(page, stopSignal).catch(err => {
+                            console.error(`[${siteKey}] Worker error:`, err);
+                        });
+                    } else {
+                        console.log(`[${siteKey}] No run() method found in worker module`);
+                    }
+                } else {
+                    console.log(`[${siteKey}] No worker module found at ${workerPath}, browser will stay open`);
+                }
+            } catch (e) {
+                console.warn(`[${siteKey}] Error loading worker module: ${e.message}`);
+                // Continue anyway - browser is still running
             }
 
             // Store worker info
@@ -130,9 +216,12 @@ class BrowserManager {
                 state: 'running',
                 config: {
                     ...config,
+                    url: targetUrl || config.url, // Store the actual URL used
                     userDataDir: profileDir,
                 },
                 startedAt: new Date(),
+                stopSignal: stopSignal,
+                workerTask: workerTask,
             });
 
             return {
@@ -165,6 +254,23 @@ class BrowserManager {
 
         try {
             worker.state = 'stopping';
+
+            // Signal worker to stop
+            if (worker.stopSignal) {
+                worker.stopSignal.isSet = true;
+            }
+
+            // Wait a bit for worker to finish gracefully
+            if (worker.workerTask) {
+                try {
+                    await Promise.race([
+                        worker.workerTask,
+                        new Promise(resolve => setTimeout(resolve, 2000)) // Max 2s wait
+                    ]);
+                } catch (e) {
+                    console.warn(`[${siteKey}] Error waiting for worker to stop: ${e.message}`);
+                }
+            }
 
             // Close browser
             if (worker.browser) {
